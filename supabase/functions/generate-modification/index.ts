@@ -42,6 +42,8 @@ async function handleCreate(body: any, apiKey: string): Promise<Response> {
 
   const prompt = buildPrompt(vehicleDesc, modification.modifTitle, modification.optionLabel)
 
+  const webhookUrl = Deno.env.get('SUPABASE_URL') + '/functions/v1/kie-webhook'
+
   const requestBody = {
     model: 'nano-banana-pro',
     input: {
@@ -49,6 +51,7 @@ async function handleCreate(body: any, apiKey: string): Promise<Response> {
       image_url: imageUrl,
       strength: 0.68,
     },
+    callback_url: webhookUrl,
   }
 
   console.log('[KIE] createTask:', JSON.stringify(requestBody))
@@ -81,45 +84,31 @@ async function handleCreate(body: any, apiKey: string): Promise<Response> {
   })
 }
 
-async function handlePoll(taskId: string, apiKey: string): Promise<Response> {
-  const res = await fetch(KIE_BASE + '/api/v1/jobs/queryTask?taskId=' + taskId, {
-    headers: { 'Authorization': 'Bearer ' + apiKey },
-  })
+async function handlePoll(taskId: string, _apiKey: string): Promise<Response> {
+  // Lit le resultat depuis Supabase (ecrit par le webhook KIE)
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2')
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  )
 
-  const data = await res.json()
-  console.log('[KIE] poll taskId=' + taskId + ':', JSON.stringify(data))
+  const { data, error } = await supabase
+    .from('pending_results')
+    .select('result_url')
+    .eq('task_id', taskId)
+    .single()
 
-  const rawStatus = data?.data?.status ?? data?.status
-  const status = rawStatus != null ? String(rawStatus).toLowerCase() : ''
+  console.log('[poll] taskId=' + taskId + ' result_url=' + (data?.result_url ?? 'null') + ' error=' + (error?.message ?? 'none'))
 
-  const url = data?.data?.output?.imageUrl
-    ?? data?.data?.output?.image_url
-    ?? data?.data?.output?.images?.[0]?.url
-    ?? data?.data?.imageUrl
-    ?? data?.data?.image_url
-    ?? data?.output?.imageUrl
-    ?? data?.imageUrl
-    ?? data?.url
-
-  console.log('[KIE] rawStatus=' + rawStatus + ' status=' + status + ' url=' + (url ?? 'none'))
-
-  // Si une URL est presente, la tache est terminee peu importe le statut
-  if (url) {
-    return new Response(JSON.stringify({ resultUrl: url }), {
+  if (data?.result_url) {
+    // Nettoie la ligne
+    await supabase.from('pending_results').delete().eq('task_id', taskId)
+    return new Response(JSON.stringify({ resultUrl: data.result_url }), {
       headers: { ...CORS, 'Content-Type': 'application/json' },
     })
   }
 
-  const isFailed = ['failed', 'error', 'cancelled', 'fail'].includes(status)
-    || rawStatus === 3 || rawStatus === '3'
-
-  if (isFailed) {
-    return new Response(JSON.stringify({ failed: true }), {
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
-  }
-
-  return new Response(JSON.stringify({ pending: true, rawStatus }), {
+  return new Response(JSON.stringify({ pending: true }), {
     headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 }
