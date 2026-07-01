@@ -329,21 +329,32 @@ function AuthForm({ className = '', onSuccess }) {
   const [mode, setMode]     = useState('signup') // 'signup' | 'login'
   const [email, setEmail]   = useState('')
   const [password, setPass] = useState('')
-  const [status, setStatus] = useState('idle') // idle | loading | success | error
+  const [status, setStatus] = useState('idle') // idle | loading | success | error | confirm-email
+  const [errMsg, setErrMsg] = useState('')
 
   const isSignup = mode === 'signup'
 
-  const switchMode = (next) => { setMode(next); setStatus('idle') }
+  const switchMode = (next) => { setMode(next); setStatus('idle'); setErrMsg('') }
+
+  const friendlyError = (msg = '') => {
+    const m = msg.toLowerCase()
+    if (m.includes('already registered') || m.includes('already been registered') || m.includes('email address is already')) return 'Cet email est déjà utilisé — connecte-toi plutôt.'
+    if (m.includes('invalid login') || m.includes('invalid credentials') || m.includes('email not confirmed')) return 'Email ou mot de passe incorrect.'
+    if (m.includes('password') && m.includes('short')) return 'Mot de passe trop court (minimum 6 caractères).'
+    if (m.includes('rate limit') || m.includes('too many')) return 'Trop de tentatives — attends quelques secondes.'
+    if (m.includes('invalid email')) return 'Adresse email invalide.'
+    return 'Une erreur est survenue — réessaie.'
+  }
 
   const submit = async (e) => {
     e.preventDefault()
     setStatus('loading')
+    setErrMsg('')
     try {
       if (isSignup) {
         const { data, error } = await supabase.auth.signUp({ email, password })
         if (error) throw error
         if (data.user && !data.session) {
-          // Confirmation email envoyée
           setStatus('confirm-email')
           return
         }
@@ -352,9 +363,9 @@ function AuthForm({ className = '', onSuccess }) {
         if (error) throw error
       }
       setStatus('success')
-      // La navigation vers l'onboarding est gérée par onAuthStateChange dans App
     } catch (err) {
       console.error('[RELOOK] Auth error:', err.message)
+      setErrMsg(friendlyError(err.message))
       setStatus('error')
     }
   }
@@ -421,6 +432,9 @@ function AuthForm({ className = '', onSuccess }) {
           aria-label="Mot de passe"
           className="w-full bg-acier border border-acier text-carte-grise placeholder-texte-muted focus:border-jaune-securite focus:bg-[#2A2820] outline-none transition-colors px-4 py-3 font-mono text-sm rounded-sm disabled:opacity-50"
         />
+        {errMsg && (
+          <p className="font-mono text-xs text-red-400 px-1 -mt-1">{errMsg}</p>
+        )}
         <button
           type="submit"
           disabled={status === 'loading'}
