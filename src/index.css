@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --noir-atelier:   #15140F;
+  --carte-grise:    #ECE6D6;
+  --jaune-securite: #F5C518;
+  --bleu-grise:     #2F4C6B;
+  --acier:          #3A3830;
+  --texte-muted:    #9C9788;
+
+  /* Safe areas iOS */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  height: 100%;
+  /* prevent bounce on iOS */
+  overscroll-behavior: none;
+}
+
+body {
+  background-color: var(--noir-atelier);
+  color: var(--carte-grise);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100%;
+  min-height: 100dvh;
+  /* prevent bounce on iOS */
+  overscroll-behavior: none;
+  /* prevent text size adjustment on rotation */
+  -webkit-text-size-adjust: 100%;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* Focus visible */
+:focus-visible {
+  outline: 2px solid var(--jaune-securite);
+  outline-offset: 3px;
+}
+
+/* Remove focus outline on touch */
+@media (hover: none) {
+  :focus-visible {
+    outline: none;
+  }
+}
+
+/* Scrollbar discrète (desktop only) */
+@media (hover: hover) {
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--noir-atelier); }
+  ::-webkit-scrollbar-thumb { background: var(--acier); border-radius: 3px; }
+}
+
+/* Bandes diagonales de sécurité */
+.hazard-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--jaune-securite) 0px,
+    var(--jaune-securite) 18px,
+    var(--noir-atelier)   18px,
+    var(--noir-atelier)   36px
+  );
+}
+
+/* Effet carton perforé */
+.perforated {
+  border: 2px dashed var(--acier);
+}
+
+/* Grille de fond */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(58, 56, 48, 0.2) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(58, 56, 48, 0.2) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Safe area padding utilities */
+.pb-safe   { padding-bottom: max(1rem, var(--sab)); }
+.pt-safe   { padding-top:    max(0px,  var(--sat)); }
+.px-safe   { padding-left:   max(1rem, var(--sal)); padding-right: max(1rem, var(--sar)); }
+
+/* Full-screen height mobile (évite le bug 100vh) */
+.h-screen-dvh { height: 100dvh; }
+.min-h-screen-dvh { min-height: 100dvh; }
+
+/* Touch-friendly minimum tap target */
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
