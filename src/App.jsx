@@ -1470,6 +1470,7 @@ function StyleStep({ photoURL, onGenerate, onBack, freeGenUsed, onPaywall }) {
                 return
               }
               const taskId = createData?.taskId
+              const recordId = createData?.recordId
               if (!taskId) throw new Error('Pas de taskId recu')
 
               // 2. Poller depuis le navigateur (max 5 min)
@@ -1477,7 +1478,7 @@ function StyleStep({ photoURL, onGenerate, onBack, freeGenUsed, onPaywall }) {
               for (let i = 0; i < 100; i++) {
                 await new Promise(r => setTimeout(r, 3000))
                 const { data: pollData, error: pollError } = await supabase.functions.invoke('generate-modification', {
-                  body: { action: 'poll', taskId },
+                  body: { action: 'poll', taskId, recordId },
                 })
                 if (pollError) throw pollError
                 console.log('[RELOOK] poll #' + i, pollData)
