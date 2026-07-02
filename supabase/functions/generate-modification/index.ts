@@ -20,7 +20,7 @@ serve(async (req) => {
       })
     }
 
-    if (body.action === 'poll') return await handlePoll(body.taskId, body.recordId, KIE_API_KEY)
+    if (body.action === 'poll') return await handlePoll(body.taskId, KIE_API_KEY)
     return await handleCreate(body, KIE_API_KEY)
   } catch (err) {
     console.error('[generate-modification]', err)
@@ -35,12 +35,11 @@ async function handleCreate(body, apiKey) {
   const { imageUrl, vehicle, modification } = body
   const vehicleDesc = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ')
   const prompt = buildPrompt(vehicleDesc, modification.modifTitle, modification.optionLabel)
-  const webhookUrl = Deno.env.get('SUPABASE_URL') + '/functions/v1/kie-webhook'
 
   const requestBody = {
     model: 'nano-banana-pro',
     input: { prompt, image_url: imageUrl, strength: 0.68 },
-    callback_url: webhookUrl,
+    callBackUrl: Deno.env.get('SUPABASE_URL') + '/functions/v1/kie-webhook',
   }
 
   console.log('[KIE] createTask:', JSON.stringify(requestBody))
@@ -58,117 +57,65 @@ async function handleCreate(body, apiKey) {
 
   const d = JSON.parse(createText)
   const taskId = d?.data?.taskId ?? d?.data?.task_id ?? d?.taskId ?? d?.id
-  const recordId = d?.data?.recordId ?? d?.data?.record_id ?? d?.recordId
-
   if (!taskId) throw new Error('Pas de taskId: ' + createText)
 
-  console.log('[KIE] taskId:', taskId, 'recordId:', recordId)
+  console.log('[KIE] taskId:', taskId)
 
-  return new Response(JSON.stringify({ taskId, recordId }), {
+  return new Response(JSON.stringify({ taskId }), {
     headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 }
 
-async function handlePoll(taskId, recordId, apiKey) {
-  // 1. Verifier la table pending_results (resultat webhook)
-  try {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2')
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL'),
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    )
-    const { data } = await supabase.from('pending_results').select('result_url').eq('task_id', taskId).single()
-    if (data?.result_url) {
-      await supabase.from('pending_results').delete().eq('task_id', taskId)
-      console.log('[poll] trouve dans DB:', data.result_url)
-      return new Response(JSON.stringify({ resultUrl: data.result_url }), {
+async function handlePoll(taskId, apiKey) {
+  const url = KIE_BASE + '/api/v1/jobs/recordInfo?taskId=' + taskId
+  console.log('[poll] GET', url)
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+  })
+
+  const text = await res.text()
+  console.log('[poll] ' + res.status + ':', text)
+
+  if (!res.ok) {
+    return new Response(JSON.stringify({ pending: true }), {
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    })
+  }
+
+  const d = JSON.parse(text)
+  const state = d?.data?.state ?? ''
+  console.log('[poll] state:', state)
+
+  if (state === 'failed' || state === 'error') {
+    return new Response(JSON.stringify({ failed: true, reason: d?.data?.failMsg ?? state }), {
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    })
+  }
+
+  if (state === 'success') {
+    let resultUrl = null
+    try {
+      const resultJson = JSON.parse(d.data.resultJson)
+      resultUrl = resultJson?.resultUrls?.[0] ?? resultJson?.imageUrl ?? resultJson?.url
+    } catch (_) {}
+
+    if (!resultUrl) {
+      resultUrl = d?.data?.imageUrl ?? d?.data?.url
+    }
+
+    if (resultUrl) {
+      console.log('[poll] image trouvee:', resultUrl)
+      return new Response(JSON.stringify({ resultUrl }), {
         headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
-  } catch (e) {
-    console.log('[poll] DB check error:', e.message)
   }
 
-  // 2. Essayer directement les endpoints KIE
-  const endpoints = [
-    { method: 'POST', path: '/api/v1/jobs/queryTask', body: { taskId } },
-    { method: 'GET', path: '/api/v1/jobs/queryTask?taskId=' + taskId, body: null },
-    { method: 'POST', path: '/api/v1/jobs/getTask', body: { taskId } },
-    { method: 'GET', path: '/api/v1/jobs/' + taskId, body: null },
-    { method: 'GET', path: '/api/v1/task/' + taskId, body: null },
-    { method: 'POST', path: '/api/v1/jobs/queryTasks', body: { taskIds: [taskId] } },
-  ]
-
-  if (recordId) {
-    endpoints.push(
-      { method: 'GET', path: '/api/v1/records/' + recordId, body: null },
-      { method: 'GET', path: '/api/v1/jobs/record/' + recordId, body: null }
-    )
-  }
-
-  for (const ep of endpoints) {
-    try {
-      const url = KIE_BASE + ep.path
-      const fetchOptions = {
-        method: ep.method,
-        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      }
-      if (ep.body) fetchOptions['body'] = JSON.stringify(ep.body)
-
-      const res = await fetch(url, fetchOptions)
-      const text = await res.text()
-      console.log('[poll] ' + ep.method + ' ' + url + ' -> ' + res.status + ':', text.substring(0, 300))
-
-      if (res.ok && text.length > 2) {
-        try {
-          const parsed = JSON.parse(text)
-          const imgUrl = extractImageUrl(parsed)
-          if (imgUrl) {
-            console.log('[poll] image trouvee via KIE API:', imgUrl)
-            return new Response(JSON.stringify({ resultUrl: imgUrl }), {
-              headers: { ...CORS, 'Content-Type': 'application/json' },
-            })
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      console.log('[poll] endpoint error:', e.message)
-    }
-  }
-
-  return new Response(JSON.stringify({ pending: true }), {
+  return new Response(JSON.stringify({ pending: true, state }), {
     headers: { ...CORS, 'Content-Type': 'application/json' },
   })
-}
-
-function extractImageUrl(data) {
-  if (!data) return null
-  if (typeof data === 'string') {
-    return (data.startsWith('http://') || data.startsWith('https://')) ? data : null
-  }
-  if (Array.isArray(data)) {
-    for (const item of data) {
-      const u = extractImageUrl(item)
-      if (u) return u
-    }
-    return null
-  }
-  if (typeof data === 'object') {
-    const directKeys = ['imageUrl', 'image_url', 'url', 'outputUrl', 'output_url', 'resultUrl', 'result_url', 'result', 'output']
-    for (const key of directKeys) {
-      if (data[key] && typeof data[key] === 'string' && data[key].startsWith('http')) return data[key]
-      if (data[key] && typeof data[key] !== 'string') {
-        const u = extractImageUrl(data[key])
-        if (u) return u
-      }
-    }
-    for (const key of Object.keys(data)) {
-      if (directKeys.includes(key)) continue
-      const u = extractImageUrl(data[key])
-      if (u) return u
-    }
-  }
-  return null
 }
 
 function buildPrompt(vehicle, modifType, option) {
