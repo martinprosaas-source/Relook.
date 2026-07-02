@@ -36,9 +36,12 @@ async function handleCreate(body, apiKey) {
   const vehicleDesc = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ')
   const prompt = buildPrompt(vehicleDesc, modification.modifTitle, modification.optionLabel)
 
+  const colorOnly = ['PEINTURE', 'COVERING'].includes(modification.modifTitle)
+  const strength = colorOnly ? 0.2 : 0.45
+
   const requestBody = {
     model: 'nano-banana-pro',
-    input: { prompt, image_url: imageUrl, strength: 0.68 },
+    input: { prompt, image_url: imageUrl, strength },
     callBackUrl: Deno.env.get('SUPABASE_URL') + '/functions/v1/kie-webhook',
   }
 
@@ -119,14 +122,15 @@ async function handlePoll(taskId, apiKey) {
 }
 
 function buildPrompt(vehicle, modifType, option) {
+  const preserve = 'keep identical camera angle, identical background, identical car position and framing, identical lighting'
   const descMap = {
-    'PEINTURE': 'full body repaint in ' + option + ' color, same car same angle same background, photorealistic automotive photography',
-    'COVERING': 'full body vinyl wrap ' + option + ', matte finish, same car same angle same background, photorealistic',
-    'JANTES': option + ' aftermarket alloy wheels, same car body same angle, photorealistic sharp detail',
-    'KIT CARROSSERIE': 'wide body kit ' + option + ' color, aggressive stance, same car same angle, photorealistic',
-    'AILERON': option + ' rear wing spoiler installed, same car same angle same background, photorealistic',
-    'PARE-CHOCS': 'sport front and rear bumper kit ' + option + ', same car same angle, photorealistic',
+    'PEINTURE': 'change only the car body paint color to ' + option + ', ' + preserve + ', photorealistic automotive photo',
+    'COVERING': 'change only the car body vinyl wrap color to ' + option + ' satin finish, ' + preserve + ', photorealistic automotive photo',
+    'JANTES': 'replace only the wheels with ' + option + ' aftermarket alloy rims, ' + preserve + ', photorealistic sharp detail',
+    'KIT CARROSSERIE': 'add wide body kit in ' + option + ' color keeping same aggressive stance, ' + preserve + ', photorealistic',
+    'AILERON': 'add ' + option + ' rear wing spoiler on the car, ' + preserve + ', photorealistic',
+    'PARE-CHOCS': 'replace bumpers with sport kit in ' + option + ', ' + preserve + ', photorealistic',
   }
-  const modifDesc = descMap[modifType] ?? modifType + ' ' + option + ', same car'
-  return vehicle + ', ' + modifDesc + ', high quality, 8k, sharp focus, realistic, no text, no watermark'
+  const modifDesc = descMap[modifType] ?? 'apply ' + modifType + ' ' + option + ', ' + preserve
+  return vehicle + ', ' + modifDesc + ', high quality, realistic, no text, no watermark, do not change background or viewpoint'
 }
