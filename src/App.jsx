@@ -228,7 +228,7 @@ function HeroSlider() {
   const [dragging, setDragging] = useState(false)
   const ref = useRef(null)
 
-  const clamp = (v) => Math.max(3, Math.min(97, v))
+  const clamp = (v) => Math.max(0, Math.min(100, v))
 
   const update = useCallback((clientX) => {
     if (!ref.current) return
@@ -1540,7 +1540,7 @@ function ResultSlider({ beforeUrl, afterUrl, beforeProps, afterProps }) {
   const [pos, setPos] = useState(45)
   const [dragging, setDragging] = useState(false)
   const ref = useRef(null)
-  const clamp = (v) => Math.max(3, Math.min(97, v))
+  const clamp = (v) => Math.max(0, Math.min(100, v))
   const update = useCallback((clientX) => {
     if (!ref.current) return
     const r = ref.current.getBoundingClientRect()
