@@ -36,8 +36,7 @@ async function handleCreate(body, apiKey) {
   const vehicleDesc = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ')
   const prompt = buildPrompt(vehicleDesc, modification.modifTitle, modification.optionLabel)
 
-  const colorOnly = ['PEINTURE', 'COVERING'].includes(modification.modifTitle)
-  const strength = colorOnly ? 0.2 : 0.45
+  const strength = 0.25
 
   const requestBody = {
     model: 'nano-banana-pro',
@@ -122,15 +121,15 @@ async function handlePoll(taskId, apiKey) {
 }
 
 function buildPrompt(vehicle, modifType, option) {
-  const preserve = 'keep identical camera angle, identical background, identical car position and framing, identical lighting'
+  const preserve = 'the background, environment, road, surroundings, camera angle, car position and framing must remain exactly identical to the original photo, only modify the car itself'
   const descMap = {
     'PEINTURE': 'change only the car body paint color to ' + option + ', ' + preserve + ', photorealistic automotive photo',
     'COVERING': 'change only the car body vinyl wrap color to ' + option + ' satin finish, ' + preserve + ', photorealistic automotive photo',
     'JANTES': 'replace only the wheels with ' + option + ' aftermarket alloy rims, ' + preserve + ', photorealistic sharp detail',
-    'KIT CARROSSERIE': 'add wide body kit in ' + option + ' color keeping same aggressive stance, ' + preserve + ', photorealistic',
+    'KIT CARROSSERIE': 'add wide body kit in ' + option + ' color on the car, ' + preserve + ', photorealistic',
     'AILERON': 'add ' + option + ' rear wing spoiler on the car, ' + preserve + ', photorealistic',
     'PARE-CHOCS': 'replace bumpers with sport kit in ' + option + ', ' + preserve + ', photorealistic',
   }
-  const modifDesc = descMap[modifType] ?? 'apply ' + modifType + ' ' + option + ', ' + preserve
-  return vehicle + ', ' + modifDesc + ', high quality, realistic, no text, no watermark, do not change background or viewpoint'
+  const modifDesc = descMap[modifType] ?? 'apply ' + modifType + ' ' + option + ' on the car, ' + preserve
+  return vehicle + ', ' + modifDesc + ', high quality, realistic, no watermark, do not alter the scene or background'
 }
